@@ -1,21 +1,28 @@
-import express, { type Request, type Response } from "express";
+import { Hono } from "hono";
+import { serve } from "@hono/node-server";
 import { randomUUID } from "node:crypto";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { createMcpServer } from "./mcp.js";
 import { config } from "./config.js";
 
-const app = express();
-app.use(express.json());
+type Env = {
+  Bindings: {
+    incoming: IncomingMessage;
+    outgoing: ServerResponse;
+  };
+};
+
+const app = new Hono<Env>();
 
 // --- Auth middleware ---
-app.use("/mcp", (req: Request, res: Response, next) => {
-  const auth = req.headers["authorization"];
+app.use("/mcp*", async (c, next) => {
+  const auth = c.req.header("authorization");
   if (!auth || auth !== `Bearer ${config.AUTH_TOKEN}`) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
+    return c.json({ error: "Unauthorized" }, 401);
   }
-  next();
+  await next();
 });
 
 // --- Session store ---
@@ -23,24 +30,22 @@ app.use("/mcp", (req: Request, res: Response, next) => {
 const sessions = new Map<string, StreamableHTTPServerTransport>();
 
 // --- POST /mcp — client-to-server messages ---
-app.post("/mcp", async (req: Request, res: Response) => {
-  const sessionId = req.headers["mcp-session-id"] as string | undefined;
+app.post("/mcp", async (c) => {
+  const { incoming: req, outgoing: res } = c.env;
+  const sessionId = c.req.header("mcp-session-id");
+  const body = await c.req.json();
 
   // Resume existing session
   if (sessionId) {
     const transport = sessions.get(sessionId);
-    if (!transport) {
-      res.status(404).json({ error: "Session not found" });
-      return;
-    }
-    await transport.handleRequest(req, res, req.body);
-    return;
+    if (!transport) return c.json({ error: "Session not found" }, 404);
+    await transport.handleRequest(req, res, body);
+    return new Response(null);
   }
 
   // New connection must start with an initialize request
-  if (!isInitializeRequest(req.body)) {
-    res.status(400).json({ error: "New connections must send an initialize request" });
-    return;
+  if (!isInitializeRequest(body)) {
+    return c.json({ error: "New connections must send an initialize request" }, 400);
   }
 
   const transport = new StreamableHTTPServerTransport({
@@ -54,54 +59,43 @@ app.post("/mcp", async (req: Request, res: Response) => {
   transport.onclose = () => {
     if (transport.sessionId) {
       sessions.delete(transport.sessionId);
-      console.log(
-        `[session] closed ${transport.sessionId} — active: ${sessions.size}`
-      );
+      console.log(`[session] closed ${transport.sessionId} — active: ${sessions.size}`);
     }
   };
 
   const server = createMcpServer();
   await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
+  await transport.handleRequest(req, res, body);
+  return new Response(null);
 });
 
 // --- GET /mcp — server-to-client SSE stream ---
-app.get("/mcp", async (req: Request, res: Response) => {
-  const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  if (!sessionId) {
-    res.status(400).json({ error: "Missing Mcp-Session-Id header" });
-    return;
-  }
+app.get("/mcp", async (c) => {
+  const { incoming: req, outgoing: res } = c.env;
+  const sessionId = c.req.header("mcp-session-id");
+  if (!sessionId) return c.json({ error: "Missing Mcp-Session-Id header" }, 400);
   const transport = sessions.get(sessionId);
-  if (!transport) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  if (!transport) return c.json({ error: "Session not found" }, 404);
   await transport.handleRequest(req, res);
+  return new Response(null);
 });
 
 // --- DELETE /mcp — explicit session termination ---
-app.delete("/mcp", async (req: Request, res: Response) => {
-  const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  if (!sessionId) {
-    res.status(400).json({ error: "Missing Mcp-Session-Id header" });
-    return;
-  }
+app.delete("/mcp", async (c) => {
+  const { incoming: req, outgoing: res } = c.env;
+  const sessionId = c.req.header("mcp-session-id");
+  if (!sessionId) return c.json({ error: "Missing Mcp-Session-Id header" }, 400);
   const transport = sessions.get(sessionId);
-  if (!transport) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+  if (!transport) return c.json({ error: "Session not found" }, 404);
   await transport.handleRequest(req, res);
+  return new Response(null);
 });
 
 // --- Health check ---
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", sessions: sessions.size });
-});
+app.get("/health", (c) => c.json({ status: "ok", sessions: sessions.size }));
 
 // --- Start ---
-app.listen(config.PORT, config.HOST, () => {
+serve({ fetch: app.fetch, port: config.PORT, hostname: config.HOST }, () => {
   console.log(`MCP server listening on http://${config.HOST}:${config.PORT}/mcp`);
   console.log(`Health check:        http://${config.HOST}:${config.PORT}/health`);
 });

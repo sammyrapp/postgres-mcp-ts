@@ -1,4 +1,4 @@
-# ts-postgres-mcp
+# postgres-mcp-ts
 
 A TypeScript MCP (Model Context Protocol) server that exposes your PostgreSQL database to Claude and other MCP clients over HTTP. Built with Streamable HTTP transport for remote use or local development/use.
 
@@ -6,9 +6,10 @@ A TypeScript MCP (Model Context Protocol) server that exposes your PostgreSQL da
 
 - **[MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)** v1.x — official SDK, Streamable HTTP transport
 - **[postgres.js](https://github.com/porsager/postgres)** — fast, modern PostgreSQL client
-- **[Express](https://expressjs.com/)** v5 — HTTP server
+- **[Hono](https://hono.dev/)** + **[@hono/node-server](https://github.com/honojs/node-server)** — lightweight HTTP server
 - **[Zod](https://zod.dev/)** — config and schema validation
 - **[tsx](https://github.com/privatenumber/tsx)** — dev runtime, **[tsup](https://tsup.egoist.dev/)** — production build
+- **Node.js v24+**
 
 ## Tools exposed to Claude
 
@@ -36,14 +37,18 @@ cp .env.example .env
 Edit `.env`:
 
 ```env
-DATABASE_URL=postgresql://user:password@localhost:5432/mydb
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USER=your_db_user
+DATABASE_PASSWORD=your_db_password
+DATABASE_NAME=postgres
 
 # Generate a strong token: openssl rand -hex 32
 AUTH_TOKEN=your-secret-token-here
 
 PORT=3000
 HOST=0.0.0.0
-ROW_LIMIT=100
+ROW_LIMIT=20
 ```
 
 ### 3. Run in development
@@ -72,7 +77,7 @@ Add this to your Claude Code MCP config (`.claude/settings.json` or via `claude 
       "type": "http",
       "url": "http://localhost:3000/mcp",
       "headers": {
-        "Authorization": "Bearer your-secret-token-here"
+        "Authorization": "Bearer secret-token"
       }
     }
   }
@@ -122,7 +127,7 @@ src/
     ...
 ```
 
-Register new tools in `src/mcp.ts` using the same `server.tool(name, description, schema, handler)` pattern.
+Register new tools in `src/mcp.ts` using the same `server.registerTool(name, { description, inputSchema }, handler)` pattern.
 
 ## Health check
 
