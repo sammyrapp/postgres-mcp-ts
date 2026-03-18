@@ -6,7 +6,7 @@ A TypeScript MCP (Model Context Protocol) server that exposes your PostgreSQL da
 
 - **[MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)** v1.x — official SDK, Streamable HTTP transport
 - **[postgres.js](https://github.com/porsager/postgres)** — fast, modern PostgreSQL client
-- **[Hono](https://hono.dev/)** + **[@hono/node-server](https://github.com/honojs/node-server)** — lightweight HTTP server
+- **[Hono](https://hono.dev/)** + **[@hono/node-server](https://github.com/honojs/node-server)** + **[@hono/mcp](https://github.com/honojs/middleware/tree/main/packages/mcp)** — HTTP server with Hono-native MCP transport
 - **[Zod](https://zod.dev/)** — config and schema validation
 - **[tsx](https://github.com/privatenumber/tsx)** — dev runtime, **[tsup](https://tsup.egoist.dev/)** — production build
 - **Node.js v24+**
@@ -57,7 +57,7 @@ ROW_LIMIT=20
 npm run dev
 ```
 
-The server starts at `http://localhost:3000/mcp`.
+The server starts at `http://localhost:3000/mcp`. TypeScript is run directly via `tsx` with hot reload — no build step needed.
 
 ### 4. Build for production
 
@@ -66,9 +66,47 @@ npm run build
 npm start
 ```
 
-## Connecting from Claude Code
+## Testing
 
-Add this to your Claude Code MCP config (`.claude/settings.json` or via `claude mcp add`):
+### HTTP smoke tests
+
+Verifies auth, routing, and error handling against the running server:
+
+```bash
+npm test
+```
+
+Checks that unauthenticated requests are rejected, bad session IDs return 404, missing headers return 400, and the health endpoint is reachable.
+
+### End-to-end test via Claude CLI
+
+Connects the MCP server to Claude Code, runs a prompt, then disconnects:
+
+```bash
+# Default prompt: "List all tables in the database"
+npm run claude-test
+
+# Custom prompt
+npm run claude-test -- "Describe the users table"
+npm run claude-test -- "Run this query: SELECT current_database(), version()"
+npm run claude-test -- "Try to insert a row into any table"  # should be rejected (read-only)
+```
+
+Requires the server to be running (`npm run dev`) and the `claude` CLI to be installed.
+
+## Connecting from Claude
+
+### Claude Code
+
+Add via CLI (temporary — for testing):
+
+```bash
+claude mcp add --transport http postgres http://localhost:3000/mcp \
+  --header "Authorization: Bearer YOUR_AUTH_TOKEN" \
+  --scope local
+```
+
+Or add permanently to your Claude Code MCP config (`.claude/settings.json`):
 
 ```json
 {
@@ -83,6 +121,26 @@ Add this to your Claude Code MCP config (`.claude/settings.json` or via `claude 
   }
 }
 ```
+
+### Claude Desktop (Mac)
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_AUTH_TOKEN"
+      }
+    }
+  }
+}
+```
+
+Then restart Claude Desktop. The postgres tools will appear in the tool selector.
 
 For a remote server, replace `localhost:3000` with your server's address and make sure you're running behind HTTPS.
 

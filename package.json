@@ -9,7 +9,8 @@
     "dev": "node --env-file=.env --import tsx/esm --watch src/index.ts",
     "build": "tsup",
     "start": "node --env-file=.env dist/index.js",
-    "test": "tsx --env-file=.env scripts/smoke-test.ts"
+    "test": "tsx --env-file=.env scripts/smoke-test.ts",
+    "claude-test": "bash scripts/mcp-test.sh"
   },
   "dependencies": {
     "@hono/mcp": "npm:@jsr/hono__mcp@^0.2.0",

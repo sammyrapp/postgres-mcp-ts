@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
 # Run a Claude prompt with the local MCP server connected, then disconnect.
-# Usage: ./scripts/mcp-test.sh "list all tables in the database"
+# Usage: ./scripts/claude-test.sh ["<prompt>"]
 
 set -euo pipefail
 
-if [ $# -eq 0 ]; then
-  echo "Usage: $0 \"<prompt>\""
-  exit 1
-fi
-
-PROMPT="$1"
+PROMPT="${1:-List all tables in the database}"
 ENV_FILE="$(dirname "$0")/../.env"
 MCP_NAME="postgres-local"
 MCP_URL="http://localhost:3000/mcp"
