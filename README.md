@@ -34,30 +34,26 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` with your database credentials and other values.
 
-```env
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-DATABASE_USER=your_db_user
-DATABASE_PASSWORD=your_db_password
-DATABASE_NAME=postgres
+### 3. Local Run Server 
 
-# Generate a strong token: openssl rand -hex 32
-AUTH_TOKEN=your-secret-token-here
-
-PORT=3000
-HOST=0.0.0.0
-ROW_LIMIT=20
-```
-
-### 3. Run in development
+#### Run in development
 
 ```bash
 npm run dev
 ```
 
 The server starts at `http://localhost:3000/mcp`. TypeScript is run directly via `tsx` with hot reload — no build step needed.
+
+#### Run with Docker
+
+```bash
+docker build -t postgres-mcp-ts .
+docker run -p 3000:3000 --env-file .env postgres-mcp-ts
+```
+
+The server will be available at `http://localhost:3000/mcp`. This is closer to the production environment and can help catch issues with the build or environment variables.
 
 ### 4. Build for production
 
@@ -89,7 +85,7 @@ npm run claude-test
 # Custom prompt
 npm run claude-test -- "Describe the users table"
 npm run claude-test -- "Run this query: SELECT current_database(), version()"
-npm run claude-test -- "Try to insert a row into any table"  # should be rejected (read-only)
+npm run claude-test -- "Try to insert a row into any table"  # Might be rejected if made read-only
 ```
 
 Requires the server to be running (`npm run dev`) and the `claude` CLI to be installed.
@@ -144,23 +140,51 @@ Then restart Claude Desktop. The postgres tools will appear in the tool selector
 
 For a remote server, replace `localhost:3000` with your server's address and make sure you're running behind HTTPS.
 
-## Deploying remotely
+## Deploying to Google Cloud Run
 
-This server is transport-agnostic — the same code runs locally or on any server. A few things to handle for remote deployment:
+The server is deployed as a container on Google Cloud Run backed by a NeonDB Postgres database.
 
-- **HTTPS**: Run behind a reverse proxy (nginx, Caddy) with TLS. Never expose the raw HTTP port publicly.
-- **Process manager**: Use `pm2` or a systemd service to keep the server running.
-- **Firewall**: Only expose the port to your proxy, not the public internet directly.
+### Prerequisites
 
-Example with Caddy (automatic HTTPS):
+- [gcloud CLI](https://cloud.google.com/sdk/docs/install) installed and authenticated (`gcloud auth login`)
+- A GCP project with billing enabled
+- A [NeonDB](https://neon.tech) database (free tier)
 
+### Database (NeonDB)
+
+Get your pooled connection string from the Neon dashboard and split it into the individual `DATABASE_*` env vars in `.env`.
+
+### Deploy
+
+Fill in `PROJECT_ID` at the top of `scripts/deploy.sh`, then:
+
+```bash
+bash scripts/deploy.sh
 ```
-mcp.yourdomain.com {
-    reverse_proxy localhost:3000
+
+This uses **Cloud Build** (free tier: 120 min/day) to build the Docker image remotely — no local Docker required. It then deploys to Cloud Run and prints the service URL.
+
+Cloud Run injects `PORT=8080` automatically; the app reads it via `config.ts`.
+
+> `--max-instances 1` is set in the deploy script and must stay that way — sessions are stored in-memory, so multiple instances would break the MCP session model.
+
+### Connecting after deploy
+
+Replace `localhost:3000` with your Cloud Run service URL in your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "type": "http",
+      "url": "https://your-service-url.run.app/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_AUTH_TOKEN"
+      }
+    }
+  }
 }
 ```
-
-Then update your MCP client config to point at `https://mcp.yourdomain.com/mcp`.
 
 ## How Streamable HTTP transport works
 
