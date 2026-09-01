@@ -66,8 +66,12 @@ await check(
   "POST /mcp with auth but non-initialize body returns 400",
   new Request(`${BASE}/mcp`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ method: "tools/list" }),
+    headers: {
+      Authorization: `Bearer ${TOKEN}`,
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
   }),
   { status: 400, bodyIncludes: "initialize" }
 );
@@ -102,6 +106,75 @@ await check(
   }),
   { status: 400, bodyIncludes: "Mcp-Session-Id" }
 );
+
+// MCP — tool tests (requires valid DB connection)
+async function initSession(): Promise<string | null> {
+  const res = await fetch(`${BASE}/mcp`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${TOKEN}`,
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "smoke-test", version: "1.0" },
+      },
+    }),
+  });
+  const sessionId = res.headers.get("mcp-session-id");
+  return sessionId;
+}
+
+const MCP_HEADERS = (sessionId: string) => ({
+  Authorization: `Bearer ${TOKEN}`,
+  "Content-Type": "application/json",
+  Accept: "application/json, text/event-stream",
+  "mcp-session-id": sessionId,
+});
+
+const sessionId = await initSession();
+
+if (!sessionId) {
+  console.log("  ✗ MCP session init failed — skipping tool tests");
+  failed++;
+} else {
+  await check(
+    "tools/list returns all 4 postgres tools",
+    new Request(`${BASE}/mcp`, {
+      method: "POST",
+      headers: MCP_HEADERS(sessionId),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
+    }),
+    { status: 200, bodyIncludes: "list_schemas" }
+  );
+
+  await check(
+    "list_schemas tool executes successfully",
+    new Request(`${BASE}/mcp`, {
+      method: "POST",
+      headers: MCP_HEADERS(sessionId),
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "list_schemas", arguments: {} },
+      }),
+    }),
+    { status: 200, bodyIncludes: "public" }
+  );
+
+  // Clean up session
+  await fetch(`${BASE}/mcp`, {
+    method: "DELETE",
+    headers: MCP_HEADERS(sessionId),
+  });
+}
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);
