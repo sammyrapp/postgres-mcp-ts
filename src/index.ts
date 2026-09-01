@@ -5,16 +5,24 @@ import { randomUUID } from "node:crypto";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import { createMcpServer } from "./mcp.js";
 import { config } from "./config.js";
+import { ensureUsersTable, findUserByApiKey, type McpUser } from "./users.js";
 
-const app = new Hono();
+await ensureUsersTable();
+
+type AppEnv = { Variables: { mcpUser: McpUser } };
+const app = new Hono<AppEnv>();
 app.use("*", logger());
 
-// --- Auth middleware ---
-const authMiddleware: MiddlewareHandler = async (c, next) => {
+// --- Auth middleware — every caller must present a valid per-user API key ---
+const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   const auth = c.req.header("authorization");
-  if (!auth || auth !== `Bearer ${config.AUTH_TOKEN}`) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
+  const token = auth?.match(/^Bearer\s+(.+)$/)?.[1];
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
+
+  const user = await findUserByApiKey(token);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  c.set("mcpUser", user);
   await next();
 };
 app.use("/mcp", authMiddleware);

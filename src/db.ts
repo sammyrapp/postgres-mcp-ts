@@ -8,4 +8,5 @@ export const sql = postgres(`${config.DATABASE_ENGINE}://${config.DATABASE_USER}
   max: 10,
   idle_timeout: 20,
   connect_timeout: 10,
+  onnotice: () => {}, // e.g. "relation already exists, skipping" from CREATE TABLE IF NOT EXISTS — expected noise
 });

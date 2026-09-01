@@ -10,7 +10,8 @@
     "build": "tsup",
     "start": "node --env-file=.env dist/index.js",
     "test": "tsx --env-file=.env scripts/smoke-test.ts",
-    "claude-test": "bash scripts/claude-test.sh"
+    "claude-test": "bash scripts/claude-test.sh",
+    "manage-users": "tsx --env-file=.env scripts/manage-users.ts"
   },
   "dependencies": {
     "@hono/mcp": "npm:@jsr/hono__mcp@^0.2.0",

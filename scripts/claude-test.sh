@@ -9,15 +9,17 @@ ENV_FILE="$(dirname "$0")/../.env"
 MCP_NAME="postgres-local"
 MCP_URL="http://localhost:3000/mcp"
 
-# Load AUTH_TOKEN from .env
 if [ ! -f "$ENV_FILE" ]; then
   echo "Error: .env file not found at $ENV_FILE"
   exit 1
 fi
-AUTH_TOKEN=$(grep '^AUTH_TOKEN=' "$ENV_FILE" | cut -d '=' -f2-)
 
-if [ -z "$AUTH_TOKEN" ]; then
-  echo "Error: AUTH_TOKEN not set in .env"
+# Ensure a "claude-test" admin user exists and grab a fresh API key for it.
+# manage-users add is idempotent — safe to (re)run every time.
+API_KEY=$(npm run --silent manage-users -- add claude-test --admin --quiet)
+
+if [ -z "$API_KEY" ]; then
+  echo "Error: failed to provision API key for claude-test user"
   exit 1
 fi
 
@@ -29,7 +31,7 @@ trap cleanup EXIT
 
 # Register MCP server
 claude mcp add --transport http "$MCP_NAME" "$MCP_URL" \
-  --header "Authorization: Bearer ${AUTH_TOKEN}" \
+  --header "Authorization: Bearer ${API_KEY}" \
   --scope local
 
 # Run prompt with MCP tools pre-approved

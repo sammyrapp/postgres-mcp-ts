@@ -9,7 +9,6 @@ const schema = z.object({
   DATABASE_PASSWORD: z.string().min(1, "DATABASE_PASSWORD is required"),
   DATABASE_NAME: z.string().min(1, "DATABASE_NAME is required"),
   DATABASE_SSL_PARAMS: z.string().optional(),
-  AUTH_TOKEN: z.string().min(1, "AUTH_TOKEN is required"),
   PORT: z.coerce.number().default(3000),
   HOST: z.string().default("0.0.0.0"),
   ROW_LIMIT: z.coerce.number().int().min(1).max(10000).default(20),
