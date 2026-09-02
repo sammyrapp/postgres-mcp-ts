@@ -103,11 +103,17 @@ neon psql --project-id rough-haze-46193679 --pooled -- -c "SELECT * FROM users;"
 - Project: `shared-with-friends` (`rough-haze-46193679`), org `org-small-silence-75760406`
 - Single branch: `production` (`br-lingering-resonance-a4jyebw6`) — no dev/staging branch exists yet, so any SQL run here hits the same database the running app uses
 
+## GCP Access (gcloud CLI)
+
+The `gcloud` CLI is available in this environment, authenticated as `sambrappaport@gmail.com` — use it as needed to investigate or verify deployment state (e.g. `gcloud projects list`, `gcloud run services list --project <id>`) rather than guessing. This is a personal project, unrelated to any employer/company GCP projects that may also be visible under this account — don't assume shared context between them.
+
+Nothing has been deployed to Cloud Run yet as of this writing (`.env`'s `GCP_PROJECT_ID` is still a placeholder). `sam-mcp-server` is an existing, empty GCP project that looks purpose-built for this kind of server, if/when we deploy.
+
 ## Deployment
 
 **Database**: NeonDB (serverless Postgres). Use their pooled connection string in `.env`. Keep postgres.js pool `max` at 10 or lower.
 
-**Server**: Google Cloud Run. `scripts/deploy.sh` handles build, push to Artifact Registry, and deploy. Fill in `PROJECT_ID` at the top of that script before first use.
+**Server**: Google Cloud Run. `scripts/deploy.sh` handles build, push to Artifact Registry, and deploy — reads `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_SERVICE_NAME`, `GCP_IMAGE_NAME` from `.env` (fill these in before first use).
 - Multi-stage Dockerfile: builder compiles TS, production stage runs only `dist/` + prod deps
 - Cloud Run injects `PORT=8080`; app reads it automatically via `config.ts`
 - `--max-instances 1` is required — sessions are in-memory, multiple instances would break the MCP session model
