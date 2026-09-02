@@ -1,11 +1,13 @@
 /**
- * Smoke test against a running server.
- * Usage: NODE_OPTIONS='--env-file=.env' tsx scripts/smoke-test.ts
+ * Smoke test against a running server — local by default, or any server via
+ * BASE_URL (e.g. to check production).
+ * Usage: tsx --env-file=.env scripts/smoke-test.ts
+ *        BASE_URL=https://mcp.rappahines.com npm run test:prod
  */
 import { sql } from "../src/db.js";
 import { ensureUsersTable, createUser, removeUser } from "../src/users.js";
 
-const BASE = `http://localhost:${process.env.PORT ?? 3000}`;
+const BASE = process.env.BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
 const TEST_USERNAME = "smoke-test";
 
 let passed = 0;
